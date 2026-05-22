@@ -1,12 +1,13 @@
-# Definição das etapas do nosso pipeline
 stages:
   - test
   - build
+  - security
 
-# Definindo que vamos usar o Docker padrão do GitLab Runner para o Build
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
+  # Define o nome e a tag dinâmica da imagem para o pipeline
+  IMAGE_NAME: "api-devsecops:$CI_COMMIT_SHORT_SHA"
 
 # 🛡️ TASK 1: Scanner de Infraestrutura (IaC) com Checkov
 checkov-scan:
@@ -15,17 +16,36 @@ checkov-scan:
     name: bridgecrew/checkov:latest
     entrypoint: [""]
   script:
-    # Roda o scan especificamente na nossa pasta de infra
     - checkov -d infra/
-  allow_failure: false # Se encontrar falha crítica, trava o pipeline!
+  allow_failure: false # Trava a esteira se a infra estiver insegura
 
-# 🐳 TASK 2: Teste de Build do Container da API
+# 🐳 TASK 2: Build do Container da API
 docker-build:
   stage: build
-  image: docker:24.0.5 # Imagem estável do Docker
+  image: docker:24.0.5
   services:
-    - docker:24.0.5-dind # Docker-in-Docker para permitir o build dentro do container
+    - docker:24.0.5-dind
   script:
-    # Valida se o Dockerfile compila perfeitamente
-    - docker build -t api-devsecops:$CI_COMMIT_SHORT_SHA .
-    - echo "Build realizado com sucesso para a tag $CI_COMMIT_SHORT_SHA"
+    # Builda a imagem localmente no runner
+    - docker build -t $IMAGE_NAME .
+    # Exporta a imagem para um arquivo compactado para o próximo estágio ler
+    - docker save -o image.tar $IMAGE_NAME
+  artifacts:
+    paths:
+      - image.tar
+    expire_in: 1 hour # O artefato expira rápido para não lotar o storage do GitLab
+
+# 🔍 TASK 3: Container Scanning & SCA com AquaSec Trivy
+trivy-scan:
+  stage: security
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  services:
+    - docker:24.0.5-dind
+  script:
+    # Carrega a imagem gerada no estágio anterior para dentro do ambiente do Trivy
+    - docker load -i image.tar
+    # Escaneia procurando falhas ALTAS e CRÍTICAS. Se achar alguma CRITICAL, quebra o pipeline (--exit-code 1)
+    - trivy image --severity HIGH,CRITICAL --exit-code 1 $IMAGE_NAME
+  allow_failure: false
