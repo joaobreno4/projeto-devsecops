@@ -8,7 +8,7 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   IMAGE_NAME: "api-devsecops:$CI_COMMIT_SHORT_SHA"
 
-# 🛡️ TASK 1: Scanner de Credenciais e Segredos Vazados
+# --- ESTÁGIO DE TESTES ---
 gitleaks-scan:
   stage: test
   image: 
@@ -18,7 +18,6 @@ gitleaks-scan:
     - gitleaks detect --verbose --source=.
   allow_failure: true
 
-# 🔍 TASK 2: Análise Estática de Código (SAST)
 semgrep-sast:
   stage: test
   image: semgrep/semgrep:latest
@@ -28,7 +27,6 @@ semgrep-sast:
     - semgrep ci --config auto
   allow_failure: true
 
-# 🧱 TASK 3: Scanner de Infraestrutura como Código (IaC - Terraform)
 checkov-scan:
   stage: test
   image:
@@ -36,4 +34,30 @@ checkov-scan:
     entrypoint: [""]
   script:
     - checkov -d infra/
+  allow_failure: true
+
+# --- ESTÁGIO DE BUILD ---
+docker-build:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  script:
+    - docker build -t $IMAGE_NAME .
+    # Salva a imagem em um arquivo para o próximo estágio conseguir ler
+    - docker save -o image.tar $IMAGE_NAME
+  artifacts:
+    paths:
+      - image.tar
+    expire_in: 1 hour
+
+# --- ESTÁGIO DE SEGURANÇA DE CONTAINER ---
+trivy-scan:
+  stage: security
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    # Carrega a imagem gerada no estágio anterior
+    - trivy image --input image.tar --severity HIGH,CRITICAL --exit-code 0
   allow_failure: true
