@@ -8,6 +8,7 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   IMAGE_NAME: "api-devsecops:$CI_COMMIT_SHORT_SHA"
 
+# 🛡️ TASK 1: Scanner de Credenciais e Segredos Vazados
 gitleaks-scan:
   stage: test
   image: 
@@ -17,15 +18,17 @@ gitleaks-scan:
     - gitleaks detect --verbose --source=.
   allow_failure: true
 
+# 🔍 TASK 2: Análise Estática de Código (SAST)
 semgrep-sast:
   stage: test
   image: semgrep/semgrep:latest
   variables:
-  SEMGREP_IN_DOCKER: "0"
+    SEMGREP_IN_DOCKER: "0"
   script:
     - semgrep ci --config auto
   allow_failure: true
 
+# 🧱 TASK 3: Scanner de Infraestrutura como Código (IaC - Terraform)
 checkov-scan:
   stage: test
   image:
