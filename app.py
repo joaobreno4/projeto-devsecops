@@ -19,11 +19,13 @@ def get_db():
 def read_root():
     return {"status": "healthy", "message": "Pipeline DevSecOps Ativo!"}
 
-# ALERTA DE VULNERABILIDADE: Concatenção direta de string (SQL Injection proposital)
-@app.get("/vulnerable-login")
-def vulnerable_login(username: str, db = Depends(get_db)):
-    query = f"SELECT * FROM users WHERE username = '{username}'"
-    db.execute(query)
+# CORRIGIDO: Usando query parametrizada segura contra SQL Injection
+@app.get("/login")
+def login(username: str, db = Depends(get_db)):
+    # O caractere '?' age como um placeholder. O SQLite garante que o input
+    # será tratado estritamente como um dado, e nunca como código executável.
+    query = "SELECT * FROM users WHERE username = ?"
+    db.execute(query, (username,))
     user = db.fetchone()
     if user:
         return {"success": True, "user": user[1]}
