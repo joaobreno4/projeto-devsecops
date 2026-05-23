@@ -20,8 +20,10 @@ gitleaks-scan:
 semgrep-sast:
   stage: test
   image: semgrep/semgrep:latest
+  variables:
+  SEMGREP_IN_DOCKER: "0"
   script:
-    - semgrep scan --config auto --error
+    - semgrep ci --config auto
   allow_failure: true
 
 checkov-scan:
