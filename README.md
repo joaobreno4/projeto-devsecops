@@ -43,7 +43,7 @@ Se quiser rodar o projeto ou validar a estrutura na sua máquina:
 
 ```bash
 # 1. Clone o repositório
-git clone [https://github.com/joaobreno4/projeto-devsecops.git](https://github.com/joaobreno4/projeto-devsecops.git)
+git clone https://github.com/joaobreno4/projeto-devsecops.git
 
 # 2. Acesse a pasta
 cd projeto-devsecops
