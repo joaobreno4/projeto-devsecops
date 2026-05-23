@@ -6,7 +6,6 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""
-  # Define o nome e a tag dinâmica da imagem para o pipeline
   IMAGE_NAME: "api-devsecops:$CI_COMMIT_SHORT_SHA"
 
 # 🛡️ TASK 1: Scanner de Infraestrutura (IaC) com Checkov
@@ -17,25 +16,43 @@ checkov-scan:
     entrypoint: [""]
   script:
     - checkov -d infra/
-  allow_failure: false # Trava a esteira se a infra estiver insegura
+  allow_failure: false
 
-# 🐳 TASK 2: Build do Container da API
+# 🔍 TASK 2: Análise Estática de Código (SAST) com Semgrep
+semgrep-sast:
+  stage: test
+  image: returntocorp/semgrep
+  script:
+    - semgrep scan --config auto --error
+  allow_failure: false
+
+# 🔑 TASK 3: Detecção de Segredos (Secrets Detection) com Gitleaks
+gitleaks-scan:
+  stage: test
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  script:
+    # Vasculha o código atual e o histórico do Git atrás de chaves expostas
+    # O parâmetro --redact mascara o segredo real nos logs do console para maior segurança
+    - gitleaks detect --verbose --source=. --redact
+  allow_failure: false
+
+# 🐳 TASK 4: Build do Container da API
 docker-build:
   stage: build
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
   script:
-    # Builda a imagem localmente no runner
     - docker build -t $IMAGE_NAME .
-    # Exporta a imagem para um arquivo compactado para o próximo estágio ler
     - docker save -o image.tar $IMAGE_NAME
   artifacts:
     paths:
       - image.tar
-    expire_in: 1 hour # O artefato expira rápido para não lotar o storage do GitLab
+    expire_in: 1 hour
 
-# 🔍 TASK 3: Container Scanning & SCA com AquaSec Trivy
+# 🧪 TASK 5: Container Scanning & SCA com AquaSec Trivy
 trivy-scan:
   stage: security
   image:
@@ -44,8 +61,6 @@ trivy-scan:
   services:
     - docker:24.0.5-dind
   script:
-    # Carrega a imagem gerada no estágio anterior para dentro do ambiente do Trivy
     - docker load -i image.tar
-    # Escaneia procurando falhas ALTAS e CRÍTICAS. Se achar alguma CRITICAL, quebra o pipeline (--exit-code 1)
     - trivy image --severity HIGH,CRITICAL --exit-code 1 $IMAGE_NAME
   allow_failure: false
